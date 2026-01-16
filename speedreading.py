@@ -492,6 +492,148 @@ def generate_speed_reading_video(
 
 
 # ============================================================================
+# Chunking
+# ============================================================================
+
+def estimate_chunk_words(
+    target_duration: float,
+    start_wpm: float,
+    peak_wpm: float,
+    ramp_words: int
+) -> int:
+    """
+    Estimate how many words fit in a target duration.
+
+    Accounts for the ramp-up period where WPM is lower.
+    """
+    # Estimate average WPM considering ramp
+    # During ramp: average is roughly (start + peak) / 2
+    # After ramp: it's peak_wpm
+
+    # For simplicity, use a weighted average based on typical chunk size
+    # Most of the chunk will be at peak WPM
+    avg_wpm = peak_wpm * 0.85 + start_wpm * 0.15
+
+    # Account for punctuation pauses (roughly 15% overhead)
+    effective_wpm = avg_wpm / 1.15
+
+    words = int(effective_wpm * target_duration / 60)
+    return max(words, 50)  # Minimum 50 words per chunk
+
+
+def chunk_text(
+    text: str,
+    words_per_chunk: int
+) -> list[str]:
+    """
+    Split text into chunks of approximately words_per_chunk words.
+
+    Tries to break at sentence boundaries when possible.
+    """
+    text = clean_text(text)
+    words = tokenize_text(text)
+
+    if len(words) <= words_per_chunk:
+        return [text]
+
+    chunks = []
+    current_chunk = []
+    current_count = 0
+
+    for word in words:
+        current_chunk.append(word)
+        current_count += 1
+
+        # Check if we've reached target size and are at a sentence boundary
+        is_sentence_end = any(word.endswith(p) for p in '.!?')
+
+        if current_count >= words_per_chunk and is_sentence_end:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = []
+            current_count = 0
+        # If we're well past target, force a break
+        elif current_count >= words_per_chunk * 1.3:
+            chunks.append(' '.join(current_chunk))
+            current_chunk = []
+            current_count = 0
+
+    # Add remaining words
+    if current_chunk:
+        chunks.append(' '.join(current_chunk))
+
+    return chunks
+
+
+def generate_chunked_videos(
+    text: str,
+    output_path: str,
+    chunk_duration: float = 20.0,
+    start_wpm: float = 200,
+    peak_wpm: float = 600,
+    ramp_words: int | None = None,
+    ramp_style: str = "smooth",
+    **kwargs
+) -> list[str]:
+    """
+    Generate multiple videos from text, each approximately chunk_duration seconds.
+
+    Args:
+        text: The full text to process
+        output_path: Base output path (e.g., "output.mp4" becomes "output_001.mp4")
+        chunk_duration: Target duration per video in seconds
+        Other args: Same as generate_speed_reading_video
+
+    Returns:
+        List of generated video paths
+    """
+    # Calculate words per chunk
+    effective_ramp = ramp_words if ramp_words else 20
+    words_per_chunk = estimate_chunk_words(
+        chunk_duration, start_wpm, peak_wpm, effective_ramp
+    )
+
+    # Split text into chunks
+    chunks = chunk_text(text, words_per_chunk)
+
+    print(f"Splitting into {len(chunks)} chunks (~{words_per_chunk} words each)")
+    print(f"Target duration: {chunk_duration} seconds per video")
+    print()
+
+    # Generate output paths
+    base_path = Path(output_path)
+    stem = base_path.stem
+    suffix = base_path.suffix
+    parent = base_path.parent
+
+    output_paths = []
+
+    for i, chunk in enumerate(chunks, 1):
+        # Generate numbered output path
+        chunk_output = parent / f"{stem}_{i:03d}{suffix}"
+
+        print(f"=== Chunk {i}/{len(chunks)} ===")
+
+        generate_speed_reading_video(
+            text=chunk,
+            output_path=str(chunk_output),
+            start_wpm=start_wpm,
+            peak_wpm=peak_wpm,
+            ramp_words=ramp_words,
+            ramp_style=ramp_style,
+            **kwargs
+        )
+
+        output_paths.append(str(chunk_output))
+        print()
+
+    print(f"Generated {len(output_paths)} videos:")
+    for p in output_paths:
+        print(f"  {p}")
+
+    return output_paths
+
+
+# ============================================================================
 # CLI
 # ============================================================================
 
@@ -512,6 +654,9 @@ Examples:
 
   # Custom ramp settings (slower start, longer ramp)
   python speedreading.py -i story.txt -o output.mp4 --start-wpm 150 --peak-wpm 700 --ramp-words 50
+
+  # Split long book into 20-second chunks
+  python speedreading.py -i book.pdf -o output.mp4 --chunk-duration 20
 
   # Direct text input
   python speedreading.py -t "The quick brown fox jumps over the lazy dog." -o output.mp4
@@ -556,6 +701,11 @@ Supported input formats:
     parser.add_argument('--orp-color', type=str, default='#ff0000',
                         help='ORP highlight color (default: #ff0000)')
 
+    # Chunking options
+    parser.add_argument('--chunk-duration', type=float, default=None,
+                        help='Split into multiple videos of this duration (seconds). '
+                             'E.g., --chunk-duration 20 creates ~20 second videos.')
+
     # Other options
     parser.add_argument('--font', type=str, help='Path to custom font file')
     parser.add_argument('--no-wpm-display', action='store_true', help='Hide WPM indicator')
@@ -568,10 +718,8 @@ Supported input formats:
     else:
         text = args.text
 
-    # Generate video
-    generate_speed_reading_video(
-        text=text,
-        output_path=args.output,
+    # Common video options
+    video_opts = dict(
         start_wpm=args.start_wpm,
         peak_wpm=args.peak_wpm,
         ramp_words=args.ramp_words,
@@ -586,6 +734,21 @@ Supported input formats:
         fps=args.fps,
         show_wpm=not args.no_wpm_display,
     )
+
+    # Generate video(s)
+    if args.chunk_duration:
+        generate_chunked_videos(
+            text=text,
+            output_path=args.output,
+            chunk_duration=args.chunk_duration,
+            **video_opts
+        )
+    else:
+        generate_speed_reading_video(
+            text=text,
+            output_path=args.output,
+            **video_opts
+        )
 
 
 if __name__ == '__main__':
