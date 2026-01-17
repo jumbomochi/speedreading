@@ -81,25 +81,39 @@ def extract_text_from_epub(epub_path: str) -> str:
     return "\n".join(text_parts)
 
 
-def extract_text_from_file(file_path: str) -> str:
+def extract_text_from_file(file_path: str, preprocess: bool = True) -> str:
     """
     Extract text from a file based on its extension.
     Supports: .txt, .pdf, .epub
+
+    Args:
+        file_path: Path to the input file
+        preprocess: If True, clean up book artifacts (headers, footers, etc.)
     """
     path = Path(file_path)
     suffix = path.suffix.lower()
 
     if suffix == '.pdf':
         print(f"Extracting text from PDF: {file_path}")
-        return extract_text_from_pdf(file_path)
+        text = extract_text_from_pdf(file_path)
     elif suffix == '.epub':
         print(f"Extracting text from EPUB: {file_path}")
-        return extract_text_from_epub(file_path)
+        text = extract_text_from_epub(file_path)
     else:
         # Assume plain text
         print(f"Reading text file: {file_path}")
         with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
+            text = f.read()
+
+    if preprocess and suffix in ('.pdf', '.epub'):
+        print("Preprocessing text (removing headers, footers, etc.)...")
+        original_words = len(text.split())
+        text = preprocess_book_text(text)
+        new_words = len(text.split())
+        removed = original_words - new_words
+        print(f"  Removed {removed} words ({removed/original_words*100:.1f}% reduction)")
+
+    return text
 
 
 def clean_text(text: str) -> str:
@@ -114,6 +128,233 @@ def clean_text(text: str) -> str:
     text = text.strip()
 
     return text
+
+
+def is_toc_line(line: str) -> bool:
+    """Check if a line looks like a table of contents entry."""
+    stripped = line.strip()
+    # TOC entries often have title followed by page number
+    # e.g., "INTRODUCTION 1" or "Chapter One . . . 23"
+    if re.match(r'^.+\s+\d+\s*$', stripped):
+        # But not if it's a long sentence (actual content)
+        if len(stripped) < 60 and not stripped.endswith('.'):
+            return True
+    # Lines with dots leading to page numbers
+    if re.search(r'\.{2,}\s*\d+\s*$', stripped):
+        return True
+    return False
+
+
+def find_book_content_boundaries(text: str) -> tuple[int, int]:
+    """
+    Try to find where the actual book content starts and ends.
+
+    Returns (start_index, end_index) for slicing the text.
+    """
+    lines = text.split('\n')
+
+    # Patterns indicating start of actual content
+    content_start_patterns = [
+        r'^chapter\s+(one|1|i)\b',
+        r'^prologue\b',
+        r'^introduction\b',
+        r'^preface\b',
+        r'^part\s+(one|1|i)\b',
+        r'^\s*1\s*$',  # Just "1" on its own line (chapter number)
+    ]
+
+    # Patterns indicating end of actual content
+    content_end_patterns = [
+        r'^acknowledge?ments?\b',
+        r'^about\s+the\s+author\b',
+        r'^notes?\b',
+        r'^index\b',
+        r'^bibliography\b',
+        r'^appendix\b',
+        r'^endnotes?\b',
+        r'^praise\s+for\b',
+        r'^also\s+by\b',
+    ]
+
+    start_patterns = [re.compile(p, re.IGNORECASE) for p in content_start_patterns]
+    end_patterns = [re.compile(p, re.IGNORECASE) for p in content_end_patterns]
+
+    start_line = 0
+    end_line = len(lines)
+
+    # Find content start (search first 20% of document)
+    search_start_limit = len(lines) // 5
+    for i, line in enumerate(lines[:search_start_limit]):
+        stripped = line.strip()
+        for pattern in start_patterns:
+            if pattern.match(stripped):
+                start_line = i
+                break
+        if start_line > 0:
+            break
+
+    # Find content end (search last 15% of document)
+    search_end_start = len(lines) - (len(lines) // 7)
+    for i in range(search_end_start, len(lines)):
+        stripped = lines[i].strip()
+        for pattern in end_patterns:
+            if pattern.match(stripped):
+                end_line = i
+                break
+        if end_line < len(lines):
+            break
+
+    return start_line, end_line
+
+
+def preprocess_book_text(text: str, trim_front_back: bool = True) -> str:
+    """
+    Preprocess book text to remove non-body content.
+
+    Removes:
+    - Page numbers
+    - Headers and footers
+    - Copyright notices
+    - ISBN numbers
+    - Publisher information
+    - "All rights reserved" text
+    - Table of contents references
+    - URLs and email addresses
+    - Repeated promotional text
+    - Front matter (title pages, copyright, etc.)
+    - Back matter (acknowledgments, about author, etc.)
+    """
+    # First, try to trim front and back matter
+    if trim_front_back:
+        start_idx, end_idx = find_book_content_boundaries(text)
+        lines = text.split('\n')
+        if start_idx > 0 or end_idx < len(lines):
+            text = '\n'.join(lines[start_idx:end_idx])
+
+    lines = text.split('\n')
+    cleaned_lines = []
+
+    # Patterns to remove entirely
+    remove_patterns = [
+        # Page numbers
+        r'^\s*\d+\s*$',  # Standalone numbers
+        r'^\s*page\s+\d+\s*$',  # "Page 123"
+        r'^\s*-\s*\d+\s*-\s*$',  # "- 123 -"
+        r'^\s*\[\s*\d+\s*\]\s*$',  # "[123]"
+
+        # Copyright and legal
+        r'copyright\s*©?\s*\d{4}',
+        r'©\s*\d{4}',
+        r'all\s+rights\s+reserved',
+        r'isbn[\s:-]*[\d-]+',
+        r'library\s+of\s+congress',
+        r'cataloging.in.publication',
+        r'printed\s+in\s+(the\s+)?(united\s+states|usa|u\.s\.)',
+        r'first\s+(edition|printing|published)',
+        r'published\s+by\s+\w+',
+
+        # URLs and emails
+        r'https?://\S+',
+        r'www\.\S+',
+        r'\S+@\S+\.\S+',
+
+        # Common header/footer patterns
+        r'^\s*chapter\s+\d+\s*$',  # Standalone "Chapter 1"
+        r'^\s*part\s+(one|two|three|four|five|i|ii|iii|iv|v|\d+)\s*$',
+
+        # Publishing boilerplate
+        r'jacket\s+design',
+        r'cover\s+design',
+        r'book\s+design',
+        r'author\s+photo',
+        r'for\s+information\s+address',
+        r'permissions?\s+department',
+        r'simon\s*&\s*schuster',
+        r'random\s+house',
+        r'penguin\s+books',
+        r'harpercollins',
+        r'macmillan',
+        r'w\.\s*w\.\s*norton',
+
+        # Promotional
+        r'also\s+by\s+(the\s+)?author',
+        r'other\s+books\s+by',
+        r'visit\s+(the\s+)?author',
+        r'follow\s+(the\s+)?author',
+        r'connect\s+with',
+
+        # Pricing and purchase info
+        r'\$\d+\.?\d*',
+        r'usa\s+\$',
+        r'can\.?\s+\$',
+
+        # Reviews and praise
+        r'praise\s+for',
+        r'new\s+york\s+times\s+book\s+review',
+        r'bestsell(er|ing)',
+        r'#\d+\s+bestseller',
+    ]
+
+    # Compile patterns (case insensitive)
+    compiled_patterns = [re.compile(p, re.IGNORECASE) for p in remove_patterns]
+
+    # Track potential repeated headers/footers
+    line_counts = {}
+    for line in lines:
+        stripped = line.strip()
+        if stripped and len(stripped) < 100:
+            line_counts[stripped] = line_counts.get(stripped, 0) + 1
+
+    # Lines that appear many times are likely headers/footers
+    repeated_lines = {line for line, count in line_counts.items() if count > 5}
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Skip empty lines (will be normalized later)
+        if not stripped:
+            cleaned_lines.append('')
+            continue
+
+        # Skip repeated header/footer lines
+        if stripped in repeated_lines:
+            continue
+
+        # Skip table of contents entries
+        if is_toc_line(stripped):
+            continue
+
+        # Check against removal patterns
+        should_remove = False
+        for pattern in compiled_patterns:
+            if pattern.search(stripped):
+                should_remove = True
+                break
+
+        if should_remove:
+            continue
+
+        # Skip lines that are just numbers and punctuation
+        if re.match(r'^[\d\s\.\-–—]+$', stripped):
+            continue
+
+        # Skip very short lines that look like artifacts
+        if len(stripped) < 3 and not re.match(r'^[A-Za-z]', stripped):
+            continue
+
+        cleaned_lines.append(line)
+
+    # Join and clean up
+    text = '\n'.join(cleaned_lines)
+
+    # Remove multiple consecutive blank lines
+    text = re.sub(r'\n{3,}', '\n\n', text)
+
+    # Remove common inline artifacts
+    text = re.sub(r'\s*\|\s*', ' ', text)
+    text = re.sub(r'\s{2,}', ' ', text)
+
+    return text.strip()
 
 
 # ============================================================================
@@ -709,12 +950,14 @@ Supported input formats:
     # Other options
     parser.add_argument('--font', type=str, help='Path to custom font file')
     parser.add_argument('--no-wpm-display', action='store_true', help='Hide WPM indicator')
+    parser.add_argument('--raw', action='store_true',
+                        help='Skip preprocessing (keep headers, footers, page numbers, etc.)')
 
     args = parser.parse_args()
 
     # Get input text
     if args.input:
-        text = extract_text_from_file(args.input)
+        text = extract_text_from_file(args.input, preprocess=not args.raw)
     else:
         text = args.text
 

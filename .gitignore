@@ -1,6 +1,11 @@
 # Generated files
 *.mp4
-*.pdf
+
+# Storage (uploads, jobs, outputs)
+storage/
+
+# Node
+node_modules/
 
 # Python
 __pycache__/

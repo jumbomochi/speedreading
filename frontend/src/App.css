@@ -1,0 +1,374 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+
+header p {
+  color: #888;
+}
+
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+section {
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+section h2 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #fff;
+  font-size: 1.2rem;
+}
+
+/* File Upload */
+.file-upload {
+  border: 2px dashed #444;
+  border-radius: 8px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.file-upload:hover,
+.file-upload.dragging {
+  border-color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+}
+
+.file-upload.uploading {
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.file-upload .upload-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.file-upload .file-types {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.file-upload .file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #333;
+  border-top-color: #ff4444;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Parameter Controls */
+.parameter-controls h3 {
+  margin-top: 0;
+}
+
+.parameter-controls fieldset {
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.parameter-controls legend {
+  color: #888;
+  padding: 0 0.5rem;
+  font-size: 0.9rem;
+}
+
+.parameter-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.parameter-controls label:last-child {
+  margin-bottom: 0;
+}
+
+.parameter-controls label span {
+  color: #aaa;
+  font-size: 0.9rem;
+}
+
+.parameter-controls label small {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.parameter-controls input[type="range"] {
+  width: 100%;
+  accent-color: #ff4444;
+}
+
+.parameter-controls input[type="number"],
+.parameter-controls select {
+  background: #252540;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 0.5rem;
+  color: #fff;
+  font-size: 1rem;
+}
+
+.parameter-controls input[type="color"] {
+  width: 60px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.parameter-controls label.checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.parameter-controls label.checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: #ff4444;
+}
+
+/* Job Progress */
+.job-progress {
+  padding: 1rem;
+  background: #252540;
+  border-radius: 8px;
+}
+
+.job-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.job-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.job-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.job-status.pending { background: #444; }
+.job-status.processing { background: #2563eb; }
+.job-status.completed { background: #16a34a; }
+.job-status.failed { background: #dc2626; }
+
+.progress-container {
+  background: #1a1a2e;
+  border-radius: 4px;
+  height: 24px;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #ff4444, #ff6666);
+  transition: width 0.3s;
+}
+
+.progress-text {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  color: #fff;
+}
+
+.current-step {
+  color: #888;
+  margin: 0.5rem 0;
+}
+
+.word-count {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.error-details {
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid #dc2626;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.download-section {
+  margin-top: 1rem;
+}
+
+.download-section h4 {
+  margin: 0 0 0.5rem 0;
+}
+
+.download-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.download-list li {
+  margin-bottom: 0.5rem;
+}
+
+.download-link {
+  color: #ff4444;
+  text-decoration: none;
+}
+
+.download-link:hover {
+  text-decoration: underline;
+}
+
+.polling-indicator {
+  display: block;
+  margin-top: 0.5rem;
+  color: #666;
+  font-size: 0.8rem;
+}
+
+/* Job List */
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.job-list-empty,
+.job-list-loading {
+  color: #666;
+  text-align: center;
+  padding: 2rem;
+}
+
+.job-item {
+  background: #252540;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.job-item:hover {
+  background: #2a2a45;
+}
+
+.job-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.job-filename {
+  font-weight: 500;
+}
+
+.job-item-details {
+  display: flex;
+  justify-content: space-between;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.job-delete {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.job-item:hover .job-delete {
+  opacity: 1;
+}
+
+.job-delete:hover {
+  color: #dc2626;
+}
+
+/* Error Message */
+.error-message {
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid #dc2626;
+  color: #ff6b6b;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
